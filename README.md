@@ -109,11 +109,15 @@ Open **http://localhost:3000**
 ### Deploy backend (Django) on Vercel
 
 1. In [Vercel](https://vercel.com), create a **new project** and import your repo.
-2. Set **Root Directory** to `backend` (so `backend/vercel.json` and `backend/api/` are used).
-3. Add **Environment Variables**: `DJANGO_SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` (Neon/PostgreSQL URL), `CORS_ALLOWED_ORIGINS` (your frontend URL).
-4. Deploy. API: `https://<project>.vercel.app/api/`, Admin: `https://<project>.vercel.app/admin/`.
-5. Run migrations once (e.g. locally with `DATABASE_URL` set: `cd backend && python manage.py migrate --noinput`, or add to Vercel Build Command: `pip install -r requirements.txt && python manage.py migrate --noinput`).
-6. Optionally run `seed_spots` and create a superuser for admin.
+2. **Critical:** In **Project Settings → General**, set **Root Directory** to `backend` and save. (If you leave it at the repo root, the API will not deploy.)
+3. In **Settings → Environment Variables**, add:
+   - `DJANGO_SECRET_KEY` — long random string
+   - `DEBUG` — `False`
+   - `DATABASE_URL` — your Neon/PostgreSQL URL (required for DB)
+   - `CORS_ALLOWED_ORIGINS` — e.g. `https://your-frontend.vercel.app`
+4. **Redeploy** (Deployments → ⋮ → Redeploy).
+5. Test: open `https://<your-project>.vercel.app/api/` — you should see `{"status":"ok","message":"MicCheck API"}`. Then try `https://<your-project>.vercel.app/api/spots/`.
+6. Run migrations once (locally with `DATABASE_URL` set: `cd backend && python manage.py migrate --noinput`), then optionally `seed_spots` and `createsuperuser` for admin.
 
 ### Deploy frontend (Next.js) on Vercel
 

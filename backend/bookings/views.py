@@ -6,6 +6,12 @@ from .models import Show, Spot, Coupon
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
 
+@api_view(["GET"])
+def health(request):
+    """Health check for Vercel/serverless - no DB required."""
+    return Response({"status": "ok", "message": "MicCheck API"})
+
+
 @api_view(['GET'])
 def show_list(request):
     """List upcoming shows with their spots."""
