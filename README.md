@@ -24,6 +24,8 @@ miccheck/
 
 ## Backend (Django)
 
+Uses **PostgreSQL** in production with env-based config. Locally you can use SQLite (default) or PostgreSQL.
+
 ### Setup
 
 ```bash
@@ -34,6 +36,21 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+### Environment (production / PostgreSQL)
+
+Copy `backend/.env.example` to `backend/.env` and set:
+
+| Variable | Description |
+|----------|-------------|
+| `DJANGO_SECRET_KEY` | Long random secret (required in production) |
+| `DEBUG` | `False` in production |
+| `ALLOWED_HOSTS` | Comma-separated domains, e.g. `api.yourdomain.com` |
+| `DATABASE_URL` | PostgreSQL URL, e.g. `postgresql://user:pass@host:5432/dbname` |
+| or `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT` | Alternative to `DATABASE_URL` |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated frontend URLs (e.g. your Vercel app) |
+
+If no `DATABASE_URL` or PostgreSQL env vars are set, Django falls back to SQLite for local dev.
+
 ### Database and admin
 
 ```bash
@@ -42,7 +59,7 @@ python manage.py createsuperuser   # optional, for admin
 python manage.py seed_spots        # sample shows, spots, coupon iLoveVC2
 ```
 
-### Run
+### Run locally
 
 ```bash
 python manage.py runserver
@@ -86,6 +103,22 @@ Open **http://localhost:3000**
 
 - **/** — Home
 - **/book** — Spot registration / booking
+
+## Deployment (Vercel + backend)
+
+- **Frontend (Next.js)** → deploy to **Vercel**. In Vercel project settings, set:
+  - `NEXT_PUBLIC_API_URL` = your Django API base URL (e.g. `https://your-django-app.railway.app/api`).
+- **Backend (Django)** → deploy to a platform that supports Python + PostgreSQL (e.g. **Railway**, **Render**, **Fly.io**). Django is not run on Vercel (Vercel is for the Next.js app).
+
+### Backend deployment (Railway / Render example)
+
+1. Create a new project and add a **PostgreSQL** service.
+2. Add a **Web Service** (or “Django”): connect repo, root directory `backend`, build command `pip install -r requirements.txt`, start command `gunicorn miccheck.wsgi --bind 0.0.0.0:$PORT`.
+3. Set environment variables from `backend/.env.example` (e.g. `DJANGO_SECRET_KEY`, `DEBUG=False`, `ALLOWED_HOSTS=your-backend-host`, `DATABASE_URL` from the PostgreSQL service, `CORS_ALLOWED_ORIGINS=https://your-app.vercel.app`).
+4. Run migrations (one-off): `python manage.py migrate` (via shell or deploy hook).
+5. Optionally run `python manage.py seed_spots` and create a superuser for admin.
+
+After deploy, use the backend URL in `NEXT_PUBLIC_API_URL` for the Vercel frontend.
 
 ## Design notes
 
