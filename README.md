@@ -104,13 +104,22 @@ Open **http://localhost:3000**
 - **/** — Home
 - **/book** — Spot registration / booking
 
-## Deployment (Vercel + backend)
+## Deployment
 
-- **Frontend (Next.js)** → deploy to **Vercel**. In Vercel project settings, set:
-  - `NEXT_PUBLIC_API_URL` = your Django API base URL (e.g. `https://your-django-app.railway.app/api`).
-- **Backend (Django)** → deploy to a platform that supports Python + PostgreSQL (e.g. **Railway**, **Render**, **Fly.io**). Django is not run on Vercel (Vercel is for the Next.js app).
+### Deploy backend (Django) on Vercel
 
-### Backend deployment (Railway / Render example)
+1. In [Vercel](https://vercel.com), create a **new project** and import your repo.
+2. Set **Root Directory** to `backend` (so `backend/vercel.json` and `backend/api/` are used).
+3. Add **Environment Variables**: `DJANGO_SECRET_KEY`, `DEBUG=False`, `DATABASE_URL` (Neon/PostgreSQL URL), `CORS_ALLOWED_ORIGINS` (your frontend URL).
+4. Deploy. API: `https://<project>.vercel.app/api/`, Admin: `https://<project>.vercel.app/admin/`.
+5. Run migrations once (e.g. locally with `DATABASE_URL` set: `cd backend && python manage.py migrate --noinput`, or add to Vercel Build Command: `pip install -r requirements.txt && python manage.py migrate --noinput`).
+6. Optionally run `seed_spots` and create a superuser for admin.
+
+### Deploy frontend (Next.js) on Vercel
+
+- Create a second Vercel project with **Root Directory** = `frontend`, and set `NEXT_PUBLIC_API_URL` to your backend URL (e.g. `https://<backend-project>.vercel.app/api`).
+
+### Backend on Railway / Render (alternative)
 
 1. Create a new project and add a **PostgreSQL** service.
 2. Add a **Web Service** (or “Django”): connect repo, root directory `backend`, build command `pip install -r requirements.txt`, start command `gunicorn miccheck.wsgi --bind 0.0.0.0:$PORT`.
