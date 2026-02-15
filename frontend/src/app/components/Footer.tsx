@@ -47,7 +47,7 @@ export function Footer() {
           <div>
             <p className="text-sm font-semibold text-[#e8e6e3]">Contact</p>
             <p className="mt-3 text-sm text-[#6b7280]">Jewel shopping centre, Versova</p>
-            <a href="mailto:hello@miccheck.com" className="text-sm text-[#6b7280] hover:text-[#f59e0b]">hello@miccheck.com</a>
+            <a href="mailto:alfazcomic0025@gmail.com" className="text-sm text-[#6b7280] hover:text-[#f59e0b]">alfazcomic0025@gmail.com</a>
           </div>
         </div>
         <p className="mt-10 border-t border-[#2a3142] pt-8 text-center text-sm text-[#6b7280]">
