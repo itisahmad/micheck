@@ -1,11 +1,15 @@
 """
 Django settings for miccheck project.
-Production-ready with PostgreSQL and env configuration.
+Database: Neon PostgreSQL only, via DATABASE_URL from .env (local) or Vercel env.
 """
 import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env from backend root (local dev). Vercel injects env vars, so no file needed there.
+from dotenv import load_dotenv
+load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
@@ -66,38 +70,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "miccheck.wsgi.application"
 
-# Database: PostgreSQL from env (DATABASE_URL or POSTGRES_*), fallback SQLite for local dev
+# Database: Neon PostgreSQL only — DATABASE_URL from .env (local) or Vercel env
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
-_db_url = os.environ.get("DATABASE_URL")
-if _db_url:
-    DATABASES = {
-        "default": dj_database_url.config(
-            default=_db_url,
-            conn_max_age=60,
-        )
-    }
-else:
-    _pg_password = os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD")
-    if _pg_password or os.environ.get("POSTGRES_HOST") or os.environ.get("PGHOST"):
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.postgresql",
-                "NAME": os.environ.get("POSTGRES_DB", os.environ.get("PGDATABASE", "miccheck")),
-                "USER": os.environ.get("POSTGRES_USER", os.environ.get("PGUSER", "postgres")),
-                "PASSWORD": _pg_password or "",
-                "HOST": os.environ.get("POSTGRES_HOST", os.environ.get("PGHOST", "localhost")),
-                "PORT": os.environ.get("POSTGRES_PORT", os.environ.get("PGPORT", "5432")),
-                "CONN_MAX_AGE": 60,
-            }
-        }
-    else:
-        DATABASES = {
-            "default": {
-                "ENGINE": "django.db.backends.sqlite3",
-                "NAME": BASE_DIR / "db.sqlite3",
-            }
-        }
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise ImproperlyConfigured(
+        "Set DATABASE_URL in backend/.env (local) or Vercel Environment Variables. "
+        "Use your Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require"
+    )
+# Neon uses postgres://; dj_database_url expects postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = "postgresql://" + DATABASE_URL.split("://", 1)[1]
+
+DATABASES = {
+    "default": dj_database_url.config(
+        default=DATABASE_URL,
+        conn_max_age=60,
+        conn_health_checks=True,
+    )
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
