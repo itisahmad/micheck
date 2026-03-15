@@ -21,8 +21,16 @@ def app(environ, start_response):
     """WSGI app: handle all requests and fix PATH_INFO for admin routes."""
     path = environ.get("PATH_INFO", "")
     
+    # Handle static files (CSS, JS, images)
+    if path.startswith("/static/"):
+        # Keep static routes as they are
+        pass
+    # Handle favicon
+    elif path == "/favicon.ico":
+        # Let Django handle favicon 404 gracefully
+        pass
     # Handle admin routes directly - don't redirect to /api/
-    if path.startswith("/admin"):
+    elif path.startswith("/admin"):
         # Keep admin routes as they are
         pass
     # Handle health check
