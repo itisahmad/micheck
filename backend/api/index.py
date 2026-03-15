@@ -18,9 +18,21 @@ _application = get_wsgi_application()
 
 
 def app(environ, start_response):
-    """WSGI app: fix PATH_INFO when request was rewritten from /admin to /api/admin."""
+    """WSGI app: handle all requests and fix PATH_INFO for admin routes."""
     path = environ.get("PATH_INFO", "")
+    
+    # Handle health check
+    if path == "/health" or path == "/":
+        environ["PATH_INFO"] = "/api/"
+    
     # Vercel rewrites /admin/* to /api/admin/*; Django expects /admin/*
     if path.startswith("/api/admin"):
         environ["PATH_INFO"] = "/admin" + path[12:]
+    elif path.startswith("/api/"):
+        # Keep /api/ routes as they are
+        pass
+    else:
+        # For any other path, redirect to /api/
+        environ["PATH_INFO"] = "/api/" + path.lstrip("/")
+    
     return _application(environ, start_response)
