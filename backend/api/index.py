@@ -22,7 +22,7 @@ def app(environ, start_response):
     path = environ.get("PATH_INFO", "")
     
     # Handle static files (CSS, JS, images)
-    if path.startswith("/static/"):
+    if path.startswith("/staticfiles/") or path.startswith("/static/"):
         # Keep static routes as they are
         pass
     # Handle favicon
