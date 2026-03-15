@@ -12,11 +12,11 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/admin/(.*)",
       "dest": "api/index.py"
     },
     {
-      "src": "/admin/(.*)",
+      "src": "/api/(.*)",
       "dest": "api/index.py"
     },
     {
