@@ -76,22 +76,27 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise ImproperlyConfigured(
-        "Set DATABASE_URL in backend/.env (local) or Vercel Environment Variables. "
-        "Use your Neon connection string, e.g. postgresql://user:pass@host/db?sslmode=require"
-    )
-# Neon uses postgres://; dj_database_url expects postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = "postgresql://" + DATABASE_URL.split("://", 1)[1]
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=DATABASE_URL,
-        conn_max_age=60,
-        conn_health_checks=True,
-    )
-}
+# Use SQLite for local development if no DATABASE_URL is set
+if not DATABASE_URL:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    # Neon uses postgres://; dj_database_url expects postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = "postgresql://" + DATABASE_URL.split("://", 1)[1]
+
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=60,
+            conn_health_checks=True,
+        )
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -119,6 +124,10 @@ CORS_ALLOW_CREDENTIALS = True
 if os.environ.get("CORS_ALLOW_ALL_ORIGINS", "").lower() in ("true", "1", "yes"):
     CORS_ALLOWED_ORIGINS = []
     CORS_ALLOW_ALL_ORIGINS = True
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [

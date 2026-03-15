@@ -2,6 +2,10 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
+from django.conf import settings
+import razorpay
+import hashlib
+import hmac
 from .models import Show, Spot, Coupon
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
@@ -70,3 +74,111 @@ def create_booking(request):
         }, status=status.HTTP_201_CREATED)
     except Exception as e:
         return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+def create_order(request):
+    """Create Razorpay order for payment."""
+    try:
+        amount = request.data.get('amount')
+        currency = request.data.get('currency', 'INR')
+        receipt = request.data.get('receipt')
+        notes = request.data.get('notes', {})
+        
+        if not amount:
+            return Response({'error': 'Amount is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if Razorpay keys are configured
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            return Response({
+                'error': 'Razorpay keys not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.',
+                'key_id_set': bool(settings.RAZORPAY_KEY_ID),
+                'key_secret_set': bool(settings.RAZORPAY_KEY_SECRET)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Initialize Razorpay client
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        # Create order
+        order_data = {
+            'amount': amount,
+            'currency': currency,
+            'receipt': receipt,
+            'notes': notes,
+            'payment_capture': 1
+        }
+        
+        order = client.order.create(order_data)
+        
+        return Response(order, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def verify_payment(request):
+    """Verify Razorpay payment and create booking."""
+    try:
+        payment_id = request.data.get('razorpay_payment_id')
+        order_id = request.data.get('razorpay_order_id')
+        signature = request.data.get('razorpay_signature')
+        
+        name = request.data.get('name')
+        email = request.data.get('email')
+        phone = request.data.get('phone')
+        spot_ids = request.data.get('spot_ids', [])
+        coupon_code = request.data.get('coupon_code')
+        
+        if not all([payment_id, order_id, signature]):
+            return Response({'error': 'Missing payment details'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify signature
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
+        # Generate signature string
+        signature_string = f"{order_id}|{payment_id}"
+        generated_signature = hmac.new(
+            settings.RAZORPAY_KEY_SECRET.encode(),
+            signature_string.encode(),
+            hashlib.sha256
+        ).hexdigest()
+        
+        if generated_signature != signature:
+            return Response({'error': 'Invalid payment signature'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify payment with Razorpay
+        try:
+            payment = client.payment.fetch(payment_id)
+            if payment['status'] != 'captured':
+                return Response({'error': 'Payment not captured'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': f'Payment verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create booking after successful payment
+        booking_data = {
+            'spot_ids': spot_ids,
+            'performer_name': name,
+            'email': email,
+            'phone': phone,
+            'coupon_code': coupon_code,
+            'payment_id': payment_id,
+            'payment_status': 'paid'
+        }
+        
+        serializer = BookingCreateSerializer(data=booking_data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        result = serializer.save()
+        
+        return Response({
+            'success': True,
+            'message': f'Payment successful! Booked {len(result["bookings"])} spot(s).',
+            'total': float(result['total']),
+            'payment_id': payment_id,
+            'bookings': result['bookings']
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

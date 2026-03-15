@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Header } from "../components/Header";
 import { Footer } from "../components/Footer";
+import RazorpayPayment from "../components/RazorpayPayment";
 import {
   fetchSpots,
   validateCoupon,
-  createBooking,
   type Spot,
   type CouponValidation,
 } from "@/lib/api";
@@ -41,6 +41,7 @@ export default function BookPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentStep, setPaymentStep] = useState(false);
 
   useEffect(() => {
     fetchSpots()
@@ -81,34 +82,33 @@ export default function BookPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedSpots.length === 0) {
       setSubmitError("Select at least one spot.");
       return;
     }
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await createBooking({
-        spot_ids: selectedSpots.map((s) => s.id),
-        performer_name: name,
-        email,
-        phone,
-        coupon_code: couponCode.trim() || undefined,
-      });
-      setSubmitSuccess("Booking successful! We'll be in touch.");
-      setName("");
-      setEmail("");
-      setPhone("");
-      setCouponCode("");
-      setCouponApplied(null);
-      setSpots((prev) => prev.map((s) => ({ ...s, selected: false })));
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Booking failed.");
-    } finally {
-      setSubmitting(false);
+    if (!name.trim() || !email.trim() || !phone.trim()) {
+      setSubmitError("Please fill in all performer details.");
+      return;
     }
+    setPaymentStep(true);
+  };
+
+  const handlePaymentSuccess = (paymentId: string) => {
+    setSubmitSuccess(`Payment successful! Your booking is confirmed. Payment ID: ${paymentId}`);
+    setName("");
+    setEmail("");
+    setPhone("");
+    setCouponCode("");
+    setCouponApplied(null);
+    setSpots((prev) => prev.map((s) => ({ ...s, selected: false })));
+    setPaymentStep(false);
+  };
+
+  const handlePaymentFailure = (error: string) => {
+    setSubmitError(error);
+    setPaymentStep(false);
   };
 
   const byDate = spots.reduce<Record<string, SpotWithSelected[]>>((acc, s) => {
@@ -285,13 +285,36 @@ export default function BookPage() {
                 <p className="rounded-lg bg-red-500/20 p-4 text-red-400">{submitError}</p>
               )}
 
-              <button
-                type="submit"
-                disabled={submitting || selectedSpots.length === 0}
-                className="w-full rounded-xl bg-[#f59e0b] py-4 font-display font-semibold text-[#0c0f14] disabled:opacity-50 hover:bg-[#fbbf24] sm:w-auto sm:px-12"
-              >
-                {submitting ? "Submitting…" : "Submit"}
-              </button>
+              {paymentStep ? (
+                <div className="space-y-4">
+                  <p className="text-center text-[#e8e6e3]">Complete your payment to confirm the booking:</p>
+                  <RazorpayPayment
+                    amount={displayTotal}
+                    name={name}
+                    email={email}
+                    phone={phone}
+                    spotIds={selectedSpots.map((s) => s.id)}
+                    couponCode={couponCode.trim() || undefined}
+                    onSuccess={handlePaymentSuccess}
+                    onFailure={handlePaymentFailure}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStep(false)}
+                    className="w-full rounded-xl border border-[#2a3142] bg-[#151922] py-3 font-display font-semibold text-[#e8e6e3] hover:bg-[#2a3142]"
+                  >
+                    Cancel Payment
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={submitting || selectedSpots.length === 0}
+                  className="w-full rounded-xl bg-[#f59e0b] py-4 font-display font-semibold text-[#0c0f14] disabled:opacity-50 hover:bg-[#fbbf24] sm:w-auto sm:px-12"
+                >
+                  {submitting ? "Processing…" : "Proceed to Payment"}
+                </button>
+              )}
 
               <p className="text-center text-sm text-[#6b7280]">
                 *Spots Once Booked are Non Transferable and Non Refundable

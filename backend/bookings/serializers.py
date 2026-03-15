@@ -37,6 +37,8 @@ class BookingCreateSerializer(serializers.Serializer):
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=20)
     coupon_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    payment_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    payment_status = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
     def validate_spot_ids(self, value):
         spots = Spot.objects.filter(id__in=value)
@@ -59,6 +61,8 @@ class BookingCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         spot_ids = validated_data['spot_ids']
         coupon = validated_data.get('coupon_code')
+        payment_id = validated_data.get('payment_id', '')
+        payment_status = validated_data.get('payment_status', 'pending')
         spots = Spot.objects.filter(id__in=spot_ids)
         total = sum(s.price for s in spots)
         if coupon and isinstance(coupon, Coupon):
@@ -80,6 +84,8 @@ class BookingCreateSerializer(serializers.Serializer):
                 phone=validated_data['phone'],
                 coupon_used=coupon if isinstance(coupon, Coupon) else None,
                 amount_paid=amount,
+                payment_id=payment_id,
+                payment_status=payment_status,
             )
             created.append(booking)
         return {'bookings': created, 'total': total}
