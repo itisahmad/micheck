@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "MicCheck — Open Mic & Stand-Up Comedy",
   description: "Your stage for open mic and lineup comedy. Book a spot and perform in front of a live audience.",
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({

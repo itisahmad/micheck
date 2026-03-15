@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#0c0f14" rx="4"/>
+  <text x="16" y="12" font-family="Arial, sans-serif" font-size="5" font-weight="bold" text-anchor="middle" fill="#f59e0b">MIC</text>
+  <text x="16" y="22" font-family="Arial, sans-serif" font-size="5" font-weight="bold" text-anchor="middle" fill="#f59e0b">CHECK</text>
+</svg>
