@@ -182,3 +182,28 @@ def verify_payment(request):
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def create_superuser(request):
+    """Create superuser for admin access (temporary for development)."""
+    try:
+        from django.contrib.auth.models import User
+        username = request.data.get('username')
+        password = request.data.get('password')
+        email = request.data.get('email', '')
+        
+        if not username or not password:
+            return Response({'error': 'Username and password required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if User.objects.filter(username=username).exists():
+            return Response({'error': 'User already exists'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = User.objects.create_superuser(username, email, password)
+        return Response({
+            'success': True,
+            'message': f'Superuser {username} created successfully',
+            'login_url': '/admin/'
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
