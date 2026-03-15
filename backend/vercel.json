@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "miccheck/wsgi.py",
+      "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
         "runtime": "python3.12",
@@ -12,8 +12,12 @@
   ],
   "routes": [
     {
-      "src": "/(.*)",
-      "dest": "miccheck/wsgi.py"
+      "src": "/api/(.*)",
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "api/index.py"
     }
   ]
 }
