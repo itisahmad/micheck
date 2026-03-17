@@ -14,15 +14,15 @@
   "routes": [
     {
       "src": "/staticfiles/(.*)",
-      "dest": "/staticfiles/$1"
+      "dest": "api/index.py"
     },
     {
       "src": "/static/(.*)",
-      "dest": "/staticfiles/$1"
+      "dest": "api/index.py"
     },
     {
       "src": "/favicon.ico",
-      "dest": "/favicon.ico"
+      "dest": "api/index.py"
     },
     {
       "src": "/admin/(.*)",

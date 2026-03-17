@@ -118,7 +118,7 @@ ON_VERCEL = os.environ.get('VERCEL') == '1'
 
 if ON_VERCEL:
     # Production settings for Vercel
-    STATIC_URL = "/staticfiles/"
+    STATIC_URL = "/static/"
     STATIC_ROOT = BASE_DIR / "staticfiles"
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 else:
