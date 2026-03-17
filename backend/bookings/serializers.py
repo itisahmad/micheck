@@ -36,7 +36,7 @@ class BookingCreateSerializer(serializers.Serializer):
     performer_name = serializers.CharField(max_length=200)
     email = serializers.EmailField()
     phone = serializers.CharField(max_length=20)
-    coupon_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    coupon_code = serializers.CharField(max_length=50, required=False, allow_null=True, allow_blank=True)
     payment_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
     payment_status = serializers.CharField(max_length=20, required=False, allow_blank=True)
 

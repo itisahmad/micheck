@@ -93,7 +93,15 @@ def create_order(request):
             return Response({
                 'error': 'Razorpay keys not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.',
                 'key_id_set': bool(settings.RAZORPAY_KEY_ID),
-                'key_secret_set': bool(settings.RAZORPAY_KEY_SECRET)
+                'key_secret_set': bool(settings.RAZORPAY_KEY_SECRET),
+                'key_id_value': settings.RAZORPAY_KEY_ID[:10] + "..." if settings.RAZORPAY_KEY_ID else None
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Check if keys are placeholder values
+        if settings.RAZORPAY_KEY_ID == "rzp_test_YourTestKeyIdHere" or settings.RAZORPAY_KEY_SECRET == "YourTestKeySecretHere":
+            return Response({
+                'error': 'Please replace placeholder Razorpay keys with actual test keys from Razorpay dashboard.',
+                'dashboard_url': 'https://dashboard.razorpay.com/app/keys'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Initialize Razorpay client
@@ -130,8 +138,41 @@ def verify_payment(request):
         spot_ids = request.data.get('spot_ids', [])
         coupon_code = request.data.get('coupon_code')
         
+        # Debug logging
+        print(f"Payment verification request:")
+        print(f"  payment_id: {payment_id}")
+        print(f"  order_id: {order_id}")
+        print(f"  signature: {signature}")
+        print(f"  name: {name}")
+        print(f"  email: {email}")
+        print(f"  phone: {phone}")
+        print(f"  spot_ids: {spot_ids}")
+        print(f"  coupon_code: {coupon_code}")
+        
         if not all([payment_id, order_id, signature]):
-            return Response({'error': 'Missing payment details'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'error': 'Missing payment details',
+                'missing_fields': {
+                    'payment_id': bool(payment_id),
+                    'order_id': bool(order_id),
+                    'signature': bool(signature)
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if Razorpay keys are configured
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            return Response({
+                'error': 'Razorpay keys not configured in backend',
+                'key_id_set': bool(settings.RAZORPAY_KEY_ID),
+                'key_secret_set': bool(settings.RAZORPAY_KEY_SECRET)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Check if keys are placeholder values
+        if settings.RAZORPAY_KEY_ID == "rzp_test_YourTestKeyIdHere" or settings.RAZORPAY_KEY_SECRET == "YourTestKeySecretHere":
+            return Response({
+                'error': 'Please replace placeholder Razorpay keys in backend with actual test keys',
+                'dashboard_url': 'https://dashboard.razorpay.com/app/keys'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # Verify signature
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
@@ -161,7 +202,7 @@ def verify_payment(request):
             'performer_name': name,
             'email': email,
             'phone': phone,
-            'coupon_code': coupon_code,
+            'coupon_code': coupon_code if coupon_code and coupon_code.strip() else None,
             'payment_id': payment_id,
             'payment_status': 'paid'
         }
@@ -172,12 +213,16 @@ def verify_payment(request):
         
         result = serializer.save()
         
+        # Serialize the booking objects
+        from .serializers import BookingSerializer
+        booking_serializer = BookingSerializer(result['bookings'], many=True)
+        
         return Response({
             'success': True,
             'message': f'Payment successful! Booked {len(result["bookings"])} spot(s).',
             'total': float(result['total']),
             'payment_id': payment_id,
-            'bookings': result['bookings']
+            'bookings': booking_serializer.data
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
