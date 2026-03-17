@@ -13,6 +13,8 @@ if _backend_root not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "miccheck.settings")
 
 from django.core.wsgi import get_wsgi_application
+from django.conf import settings
+from django.core.handlers.wsgi import WSGIHandler
 
 _application = get_wsgi_application()
 
@@ -21,14 +23,22 @@ def app(environ, start_response):
     """WSGI app: handle all requests and fix PATH_INFO for admin routes."""
     path = environ.get("PATH_INFO", "")
     
-    # Handle static files (CSS, JS, images) - let Django handle them
-    if path.startswith("/staticfiles/") or path.startswith("/static/"):
-        # Keep static routes as they are - Django will serve them
-        pass
+    # For static files, we need to serve them directly
+    if path.startswith("/static/") or path.startswith("/staticfiles/"):
+        # Use Django's static file serving
+        from django.contrib.staticfiles.handlers import StaticFilesHandler
+        static_app = StaticFilesHandler(_application)
+        return static_app(environ, start_response)
     # Handle favicon
     elif path == "/favicon.ico":
-        # Let Django handle favicon 404 gracefully
-        pass
+        # Try to serve favicon or return 404
+        try:
+            from django.contrib.staticfiles.handlers import StaticFilesHandler
+            static_app = StaticFilesHandler(_application)
+            return static_app(environ, start_response)
+        except:
+            start_response("404 Not Found", [])
+            return [b""]
     # Handle admin routes directly - don't redirect to /api/
     elif path.startswith("/admin"):
         # Keep admin routes as they are

@@ -13,11 +13,11 @@
   "buildCommand": "python manage.py collectstatic --noinput",
   "routes": [
     {
-      "src": "/staticfiles/(.*)",
+      "src": "/static/(.*)",
       "dest": "api/index.py"
     },
     {
-      "src": "/static/(.*)",
+      "src": "/staticfiles/(.*)",
       "dest": "api/index.py"
     },
     {
