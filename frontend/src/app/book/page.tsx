@@ -55,17 +55,25 @@ export default function BookPage() {
       try {
         // First check maintenance status
         const maintenanceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/maintenance-status/`);
+        
+        if (!maintenanceResponse.ok) {
+          throw new Error(`HTTP error! status: ${maintenanceResponse.status}`);
+        }
+        
         const maintenanceData = await maintenanceResponse.json();
+        console.log("DEBUG: Maintenance data:", maintenanceData);
         setMaintenanceData(maintenanceData);
         setMaintenanceLoading(false);
 
         // If in maintenance mode, don't fetch spots
         if (maintenanceData.maintenance_mode) {
+          console.log("DEBUG: Site is in maintenance mode, not fetching spots");
           setLoading(false);
           return;
         }
 
         // Only fetch spots if not in maintenance
+        console.log("DEBUG: Site is not in maintenance mode, fetching spots");
         fetchSpots()
           .then((data) => setSpots(data.map((s) => ({ ...s, selected: false }))))
           .catch(() => setError("Failed to load spots"))

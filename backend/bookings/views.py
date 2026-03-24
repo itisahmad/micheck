@@ -259,9 +259,16 @@ def maintenance_status(request):
     """Get maintenance mode status for frontend."""
     try:
         site_settings = SiteSettings.get_settings()
+        print(f"DEBUG: Maintenance mode: {site_settings.maintenance_mode}, Message: {site_settings.maintenance_message}")
         return Response({
-            'maintenance_mode': site_settings.maintenance_mode,
+            'maintenance_mode': bool(site_settings.maintenance_mode),
             'maintenance_message': site_settings.maintenance_message
         })
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        print(f"DEBUG: Error getting maintenance status: {str(e)}")
+        # If there's any error, default to not being in maintenance mode
+        return Response({
+            'maintenance_mode': False,
+            'maintenance_message': 'Service temporarily unavailable',
+            'error': str(e)
+        }, status=status.HTTP_200_OK)
