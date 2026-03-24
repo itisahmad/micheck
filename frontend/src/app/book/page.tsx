@@ -12,6 +12,11 @@ import {
   type CouponValidation,
 } from "@/lib/api";
 
+interface MaintenanceData {
+  maintenance_mode: boolean;
+  maintenance_message: string;
+}
+
 function formatTime(timeStr: string) {
   const [h, m] = timeStr.split(":").map(Number);
   const period = h >= 12 ? "PM" : "AM";
@@ -28,6 +33,8 @@ type SpotWithSelected = Spot & { selected?: boolean };
 export default function BookPage() {
   const [spots, setSpots] = useState<SpotWithSelected[]>([]);
   const [loading, setLoading] = useState(true);
+  const [maintenanceData, setMaintenanceData] = useState<MaintenanceData | null>(null);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [couponCode, setCouponCode] = useState("");
@@ -44,10 +51,34 @@ export default function BookPage() {
   const [paymentStep, setPaymentStep] = useState(false);
 
   useEffect(() => {
-    fetchSpots()
-      .then((data) => setSpots(data.map((s) => ({ ...s, selected: false }))))
-      .catch(() => setError("Failed to load spots"))
-      .finally(() => setLoading(false));
+    const checkMaintenanceAndFetchSpots = async () => {
+      try {
+        // First check maintenance status
+        const maintenanceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/maintenance-status/`);
+        const maintenanceData = await maintenanceResponse.json();
+        setMaintenanceData(maintenanceData);
+        setMaintenanceLoading(false);
+
+        // If in maintenance mode, don't fetch spots
+        if (maintenanceData.maintenance_mode) {
+          setLoading(false);
+          return;
+        }
+
+        // Only fetch spots if not in maintenance
+        fetchSpots()
+          .then((data) => setSpots(data.map((s) => ({ ...s, selected: false }))))
+          .catch(() => setError("Failed to load spots"))
+          .finally(() => setLoading(false));
+      } catch (error) {
+        console.error("Failed to check maintenance status:", error);
+        setMaintenanceLoading(false);
+        setError("Failed to check system status");
+        setLoading(false);
+      }
+    };
+
+    checkMaintenanceAndFetchSpots();
   }, []);
 
   const selectedSpots = spots.filter((s) => s.selected);
@@ -130,14 +161,35 @@ export default function BookPage() {
             Please select the spots you would like to register.
           </p>
 
-          {loading && (
+          {maintenanceLoading && (
+            <div className="mt-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f59e0b] mx-auto mb-4"></div>
+              <p className="text-[#6b7280]">Checking system status...</p>
+            </div>
+          )}
+          
+          {maintenanceData?.maintenance_mode && !maintenanceLoading && (
+            <div className="mt-8 bg-[#1a1f2e] rounded-xl p-6 border border-[#2a3142]">
+              <h2 className="font-display text-lg font-semibold text-white mb-4">
+                🔧 Under Maintenance
+              </h2>
+              <p className="text-[#6b7280] text-lg leading-relaxed">
+                {maintenanceData.maintenance_message}
+              </p>
+              <p className="text-[#6b7280] text-sm mt-4">
+                Please check back later. You can still access the admin panel if needed.
+              </p>
+            </div>
+          )}
+          
+          {loading && !maintenanceLoading && !maintenanceData?.maintenance_mode && (
             <p className="mt-8 text-[#6b7280]">Loading spots…</p>
           )}
-          {error && (
+          {error && !maintenanceData?.maintenance_mode && (
             <p className="mt-8 text-red-400">{error}</p>
           )}
 
-          {!loading && !error && (
+          {!loading && !error && !maintenanceData?.maintenance_mode && (
             <form onSubmit={handleSubmit} className="mt-8 space-y-8">
               {/* Available Spots - all dates/slots from backend */}
               <div>
