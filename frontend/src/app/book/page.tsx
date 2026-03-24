@@ -272,11 +272,11 @@ export default function BookPage() {
               </div>
 
               {/* Valentine's Week Offer */}
-              <div className="rounded-xl border border-[#f59e0b]/40 bg-[#f59e0b]/10 p-4 text-center text-sm text-[#e8e6e3]">
+              {/* <div className="rounded-xl border border-[#f59e0b]/40 bg-[#f59e0b]/10 p-4 text-center text-sm text-[#e8e6e3]">
                 <strong className="text-[#f59e0b]">Valentine&apos;s Week Offer!</strong>
                 <br />
                 Book minimum <strong>6 spots</strong> and use coupon code <code className="rounded bg-[#0c0f14] px-2 py-0.5 font-mono text-[#f59e0b]">iLoveVC2</code> to get spots at just ₹100/Spot
-              </div>
+              </div> */}
 
               {submitSuccess && (
                 <p className="rounded-lg bg-[#22c55e]/20 p-4 text-[#22c55e]">{submitSuccess}</p>
