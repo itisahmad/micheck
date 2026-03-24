@@ -54,7 +54,10 @@ export default function BookPage() {
     const checkMaintenanceAndFetchSpots = async () => {
       try {
         // First check maintenance status
-        const maintenanceResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/maintenance-status/`);
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/maintenance-status/`;
+        console.log("DEBUG: Calling maintenance API:", apiUrl);
+        
+        const maintenanceResponse = await fetch(apiUrl);
         
         if (!maintenanceResponse.ok) {
           throw new Error(`HTTP error! status: ${maintenanceResponse.status}`);
@@ -65,8 +68,11 @@ export default function BookPage() {
         setMaintenanceData(maintenanceData);
         setMaintenanceLoading(false);
 
+        // TEMPORARY TEST: Force maintenance mode to test display
+        const testMaintenanceMode = true; // Set to false to disable test
+        
         // If in maintenance mode, don't fetch spots
-        if (maintenanceData.maintenance_mode) {
+        if (maintenanceData.maintenance_mode || testMaintenanceMode) {
           console.log("DEBUG: Site is in maintenance mode, not fetching spots");
           setLoading(false);
           return;
@@ -176,7 +182,7 @@ export default function BookPage() {
             </div>
           )}
           
-          {maintenanceData?.maintenance_mode && !maintenanceLoading && (
+          {(maintenanceData?.maintenance_mode || true) && !maintenanceLoading && (
             <div className="mt-8 bg-[#1a1f2e] rounded-xl p-8 border-2 border-[#f59e0b]">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-[#f59e0b] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -200,7 +206,7 @@ export default function BookPage() {
               </h2>
               <div className="bg-[#0c0f14] rounded-lg p-6 mb-6">
                 <p className="text-[#e8e6e3] text-lg leading-relaxed text-center">
-                  {maintenanceData.maintenance_message}
+                  {maintenanceData?.maintenance_message || "We are currently under maintenance. Please check back soon."}
                 </p>
               </div>
               <div className="text-center space-y-4">
