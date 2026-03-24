@@ -10,4 +10,5 @@ urlpatterns = [
     path('create-order/', views.create_order),
     path('verify-payment/', views.verify_payment),
     path('create-superuser/', views.create_superuser),
+    path('maintenance-status/', views.maintenance_status),
 ]

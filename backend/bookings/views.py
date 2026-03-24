@@ -6,7 +6,7 @@ from django.conf import settings
 import razorpay
 import hashlib
 import hmac
-from .models import Show, Spot, Coupon
+from .models import Show, Spot, Coupon, SiteSettings
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
 
@@ -249,6 +249,19 @@ def create_superuser(request):
             'success': True,
             'message': f'Superuser {username} created successfully',
             'login_url': '/admin/'
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def maintenance_status(request):
+    """Get maintenance mode status for frontend."""
+    try:
+        site_settings = SiteSettings.get_settings()
+        return Response({
+            'maintenance_mode': site_settings.maintenance_mode,
+            'maintenance_message': site_settings.maintenance_message
         })
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

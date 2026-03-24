@@ -79,3 +79,21 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.performer_name} - {self.spot}"
+
+
+class SiteSettings(models.Model):
+    """Site-wide settings that can be managed from admin."""
+    maintenance_mode = models.BooleanField(default=False, help_text="Enable maintenance mode to take the site down")
+    maintenance_message = models.TextField(default="We are currently under maintenance. Please check back soon.", help_text="Message to show when site is under maintenance")
+    
+    class Meta:
+        verbose_name = "Site Settings"
+        verbose_name_plural = "Site Settings"
+    
+    def __str__(self):
+        return "Site Settings"
+    
+    @classmethod
+    def get_settings(cls):
+        settings_obj, created = cls.objects.get_or_create(pk=1)
+        return settings_obj

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Show, Spot, Coupon, Booking
+from .models import Show, Spot, Coupon, Booking, SiteSettings
 
 
 @admin.register(Show)
@@ -34,3 +34,15 @@ class BookingAdmin(admin.ModelAdmin):
     list_display = ('performer_name', 'email', 'spot', 'amount_paid', 'created_at')
     list_filter = ('created_at', 'spot__show__date')
     search_fields = ('performer_name', 'email')
+
+
+@admin.register(SiteSettings)
+class SiteSettingsAdmin(admin.ModelAdmin):
+    list_display = ('maintenance_mode', 'maintenance_message')
+    
+    def has_add_permission(self, request):
+        # Only allow one settings object
+        return not SiteSettings.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        return False

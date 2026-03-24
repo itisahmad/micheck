@@ -142,6 +142,10 @@ if os.environ.get("CORS_ALLOW_ALL_ORIGINS", "").lower() in ("true", "1", "yes"):
 RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
+# Maintenance Mode
+MAINTENANCE_MODE = os.environ.get("MAINTENANCE_MODE", "False").lower() == "true"
+MAINTENANCE_MESSAGE = os.environ.get("MAINTENANCE_MESSAGE", "We are currently under maintenance. Please check back soon.")
+
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
