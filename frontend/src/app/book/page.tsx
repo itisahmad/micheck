@@ -68,11 +68,8 @@ export default function BookPage() {
         setMaintenanceData(maintenanceData);
         setMaintenanceLoading(false);
 
-        // TEMPORARY TEST: Force maintenance mode to test display
-        const testMaintenanceMode = true; // Set to false to disable test
-        
         // If in maintenance mode, don't fetch spots
-        if (maintenanceData.maintenance_mode || testMaintenanceMode) {
+        if (maintenanceData.maintenance_mode) {
           console.log("DEBUG: Site is in maintenance mode, not fetching spots");
           setLoading(false);
           return;
@@ -182,7 +179,7 @@ export default function BookPage() {
             </div>
           )}
           
-          {(maintenanceData?.maintenance_mode || true) && !maintenanceLoading && (
+          {maintenanceData?.maintenance_mode && !maintenanceLoading && (
             <div className="mt-8 bg-[#1a1f2e] rounded-xl p-8 border-2 border-[#f59e0b]">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-[#f59e0b] rounded-full flex items-center justify-center mx-auto mb-4">
