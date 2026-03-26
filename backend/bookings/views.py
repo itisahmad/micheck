@@ -6,6 +6,7 @@ from django.conf import settings
 import razorpay
 import hashlib
 import hmac
+import time
 from .models import Show, Spot, Coupon, SiteSettings
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
@@ -80,16 +81,21 @@ def create_booking(request):
 def create_order(request):
     """Create Razorpay order for payment."""
     try:
+        data = request.data
+        print(f"[RAZORPAY] [CREATE-ORDER] Request received: {data}")
+        
         amount = request.data.get('amount')
-        currency = request.data.get('currency', 'INR')
-        receipt = request.data.get('receipt')
-        notes = request.data.get('notes', {})
+        print(f"[RAZORPAY] [CREATE-ORDER] Amount: {amount}")
         
         if not amount:
+            print(f"[RAZORPAY] [CREATE-ORDER] ERROR: Amount missing")
             return Response({'error': 'Amount is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if Razorpay keys are configured
+        print(f"[RAZORPAY] [CREATE-ORDER] Razorpay Key ID: {settings.RAZORPAY_KEY_ID[:10]}..." if settings.RAZORPAY_KEY_ID else "[RAZORPAY] [CREATE-ORDER] ERROR: Razorpay Key ID not set")
+        print(f"[RAZORPAY] [CREATE-ORDER] Razorpay Key Secret: {'SET' if settings.RAZORPAY_KEY_SECRET else 'NOT SET'}")
+        
         if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            print(f"[RAZORPAY] [CREATE-ORDER] ERROR: Razorpay keys not configured")
             return Response({
                 'error': 'Razorpay keys not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in environment.',
                 'key_id_set': bool(settings.RAZORPAY_KEY_ID),
@@ -99,6 +105,7 @@ def create_order(request):
         
         # Check if keys are placeholder values
         if settings.RAZORPAY_KEY_ID == "rzp_test_YourTestKeyIdHere" or settings.RAZORPAY_KEY_SECRET == "YourTestKeySecretHere":
+            print(f"[RAZORPAY] [CREATE-ORDER] ERROR: Using placeholder Razorpay keys")
             return Response({
                 'error': 'Please replace placeholder Razorpay keys with actual test keys from Razorpay dashboard.',
                 'dashboard_url': 'https://dashboard.razorpay.com/app/keys'
@@ -106,8 +113,13 @@ def create_order(request):
         
         # Initialize Razorpay client
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        print(f"[RAZORPAY] [CREATE-ORDER] Razorpay client initialized")
         
         # Create order
+        currency = request.data.get('currency', 'INR')
+        receipt = request.data.get('receipt', f"receipt_{int(time.time())}")
+        notes = request.data.get('notes', {})
+        
         order_data = {
             'amount': amount,
             'currency': currency,
@@ -116,7 +128,11 @@ def create_order(request):
             'payment_capture': 1
         }
         
+        print(f"[RAZORPAY] [CREATE-ORDER] Creating order with data: {order_data}")
+        
         order = client.order.create(order_data)
+        
+        print(f"[RAZORPAY] [CREATE-ORDER] Order created successfully: {order}")
         
         return Response(order, status=status.HTTP_201_CREATED)
         
@@ -128,28 +144,22 @@ def create_order(request):
 def verify_payment(request):
     """Verify Razorpay payment and create booking."""
     try:
+        data = request.data
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Request received: {data}")
+        
         payment_id = request.data.get('razorpay_payment_id')
         order_id = request.data.get('razorpay_order_id')
         signature = request.data.get('razorpay_signature')
+        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
         
-        name = request.data.get('name')
-        email = request.data.get('email')
-        phone = request.data.get('phone')
-        spot_ids = request.data.get('spot_ids', [])
-        coupon_code = request.data.get('coupon_code')
-        
-        # Debug logging
-        print(f"Payment verification request:")
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Parsed data:")
         print(f"  payment_id: {payment_id}")
         print(f"  order_id: {order_id}")
         print(f"  signature: {signature}")
-        print(f"  name: {name}")
-        print(f"  email: {email}")
-        print(f"  phone: {phone}")
-        print(f"  spot_ids: {spot_ids}")
-        print(f"  coupon_code: {coupon_code}")
+        print(f"  booking_ids: {booking_ids}")
         
         if not all([payment_id, order_id, signature]):
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Missing payment details")
             return Response({
                 'error': 'Missing payment details',
                 'missing_fields': {
@@ -161,6 +171,7 @@ def verify_payment(request):
         
         # Check if Razorpay keys are configured
         if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Razorpay keys not configured")
             return Response({
                 'error': 'Razorpay keys not configured in backend',
                 'key_id_set': bool(settings.RAZORPAY_KEY_ID),
@@ -169,6 +180,7 @@ def verify_payment(request):
         
         # Check if keys are placeholder values
         if settings.RAZORPAY_KEY_ID == "rzp_test_YourTestKeyIdHere" or settings.RAZORPAY_KEY_SECRET == "YourTestKeySecretHere":
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Using placeholder Razorpay keys")
             return Response({
                 'error': 'Please replace placeholder Razorpay keys in backend with actual test keys',
                 'dashboard_url': 'https://dashboard.razorpay.com/app/keys'
@@ -176,6 +188,7 @@ def verify_payment(request):
         
         # Verify signature
         client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Razorpay client initialized for signature verification")
         
         # Generate signature string
         signature_string = f"{order_id}|{payment_id}"
@@ -185,46 +198,67 @@ def verify_payment(request):
             hashlib.sha256
         ).hexdigest()
         
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Signature verification:")
+        print(f"  signature_string: {signature_string}")
+        print(f"  generated_signature: {generated_signature}")
+        print(f"  received_signature: {signature}")
+        
         if generated_signature != signature:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Invalid signature")
             return Response({'error': 'Invalid payment signature'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Signature verified successfully")
         
         # Verify payment with Razorpay
         try:
             payment = client.payment.fetch(payment_id)
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] Payment details from Razorpay: {payment}")
+            
             if payment['status'] != 'captured':
+                print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Payment not captured. Status: {payment['status']}")
                 return Response({'error': 'Payment not captured'}, status=status.HTTP_400_BAD_REQUEST)
+                
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] Payment captured successfully")
         except Exception as e:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Payment verification failed: {str(e)}")
             return Response({'error': f'Payment verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Update existing bookings after successful payment
-        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
-        
         if not booking_ids:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: No booking IDs provided")
             return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get existing bookings
         bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Found {len(bookings)} bookings to update out of {len(booking_ids)} requested")
         
         if len(bookings) != len(booking_ids):
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Invalid booking IDs or bookings already processed")
             return Response({'error': 'Invalid booking IDs or bookings already processed'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Update bookings with payment details
         for booking in bookings:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] Updating booking {booking.id}: {booking.performer_name} - {booking.spot}")
             booking.payment_id = payment_id
             booking.payment_status = 'paid'
             booking.booking_status = 'confirmed'
             booking.save()
         
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Successfully updated {len(bookings)} bookings")
+        
         # Serialize the updated booking objects
         from .serializers import BookingSerializer
         booking_serializer = BookingSerializer(bookings, many=True)
         
-        return Response({
+        response_data = {
             'success': True,
             'message': f'Payment successful! Confirmed {len(bookings)} booking(s).',
             'payment_id': payment_id,
             'bookings': booking_serializer.data
-        }, status=status.HTTP_200_OK)
+        }
+        
+        print(f"[RAZORPAY] [VERIFY-PAYMENT] Success response: {response_data}")
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -260,12 +294,16 @@ def create_pre_booking(request):
     """Create booking with pending status before payment."""
     try:
         data = request.data
+        print(f"🔍 [PRE-BOOKING] Request received: {data}")
+        
         spot_ids = data.get('spot_ids', '').split(',') if data.get('spot_ids') else []
         performer_name = data.get('name', '').strip()
         email = data.get('email', '').strip()
         phone = data.get('phone', '').strip()
         coupon_code = data.get('coupon_code', '').strip() or None
         amount = data.get('amount', 0)
+        
+        print(f"🔍 [PRE-BOOKING] Parsed data - Spots: {spot_ids}, Name: {performer_name}, Email: {email}, Phone: {phone}, Coupon: {coupon_code}, Amount: {amount}")
         
         # Validate required fields
         if not spot_ids or not performer_name or not email or not phone:
@@ -275,7 +313,10 @@ def create_pre_booking(request):
         
         # Get spots
         spots = Spot.objects.filter(id__in=spot_ids)
+        print(f"🔍 [PRE-BOOKING] Found {len(spots)} spots out of {len(spot_ids)} requested")
+        
         if len(spots) != len(spot_ids):
+            print(f"🔍 [PRE-BOOKING] ERROR: Spots not found. Requested: {spot_ids}, Found: {[s.id for s in spots]}")
             return Response({
                 'error': 'One or more spots not found'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -285,6 +326,8 @@ def create_pre_booking(request):
         for spot in spots:
             if spot.is_full:
                 unavailable_spots.append(f"{spot.show_label or spot.show_date} - {spot.time}")
+        
+        print(f"🔍 [PRE-BOOKING] Availability check - Unavailable spots: {unavailable_spots}")
         
         if unavailable_spots:
             return Response({
@@ -297,7 +340,9 @@ def create_pre_booking(request):
         if coupon_code:
             try:
                 coupon = Coupon.objects.get(code=coupon_code, is_active=True)
+                print(f"🔍 [PRE-BOOKING] Coupon validated: {coupon_code}")
             except Coupon.DoesNotExist:
+                print(f"🔍 [PRE-BOOKING] ERROR: Invalid coupon code: {coupon_code}")
                 return Response({
                     'error': 'Invalid coupon code'
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -317,16 +362,21 @@ def create_pre_booking(request):
             )
             bookings.append(booking)
         
+        print(f"🔍 [PRE-BOOKING] Created {len(bookings)} bookings with IDs: {[b.id for b in bookings]}")
+        
         # Serialize bookings
         from .serializers import BookingSerializer
         booking_serializer = BookingSerializer(bookings, many=True)
         
-        return Response({
+        response_data = {
             'success': True,
             'message': f'Pre-booking created for {len(bookings)} spot(s)',
             'bookings': booking_serializer.data,
             'total_amount': sum(float(booking.amount_paid) for booking in bookings)
-        }, status=status.HTTP_201_CREATED)
+        }
+        
+        print(f"🔍 [PRE-BOOKING] Success response: {response_data}")
+        return Response(response_data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         print(f"DEBUG: Error creating pre-booking: {str(e)}")
@@ -339,27 +389,38 @@ def create_pre_booking(request):
 def handle_payment_cancellation(request):
     """Handle payment cancellation - mark bookings as cancelled."""
     try:
+        data = request.data
+        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Request received: {data}")
+        
         booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
+        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Booking IDs to cancel: {booking_ids}")
         
         if not booking_ids:
+            print(f"[RAZORPAY] [PAYMENT-CANCELLED] ERROR: No booking IDs provided")
             return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Get existing bookings
         bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
+        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Found {len(bookings)} pending bookings to cancel")
         
         if not bookings.exists():
+            print(f"[RAZORPAY] [PAYMENT-CANCELLED] ERROR: No pending bookings found")
             return Response({'error': 'No pending bookings found'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Update bookings as cancelled
         for booking in bookings:
+            print(f"[RAZORPAY] [PAYMENT-CANCELLED] Cancelling booking {booking.id}: {booking.performer_name} - {booking.spot}")
             booking.payment_status = 'cancelled'
             booking.booking_status = 'cancelled'
             booking.save()
         
-        return Response({
+        response_data = {
             'success': True,
             'message': f'Cancelled {len(bookings)} booking(s)'
-        }, status=status.HTTP_200_OK)
+        }
+        
+        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Success: {response_data}")
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
