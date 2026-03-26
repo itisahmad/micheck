@@ -7,8 +7,10 @@ urlpatterns = [
     path('spots/', views.spot_list),
     path('coupon/validate/', views.validate_coupon),
     path('bookings/', views.create_booking),
+    path('pre-booking/', views.create_pre_booking),
     path('create-order/', views.create_order),
     path('verify-payment/', views.verify_payment),
+    path('payment-cancelled/', views.handle_payment_cancellation),
     path('create-superuser/', views.create_superuser),
     path('maintenance-status/', views.maintenance_status),
 ]

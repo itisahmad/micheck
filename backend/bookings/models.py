@@ -71,6 +71,12 @@ class Booking(models.Model):
         ('pending', 'Pending'),
         ('paid', 'Paid'),
         ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ], default='pending')
+    booking_status = models.CharField(max_length=20, choices=[
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('cancelled', 'Cancelled'),
     ], default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
 

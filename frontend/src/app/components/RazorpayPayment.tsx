@@ -106,14 +106,40 @@ export default function RazorpayPayment({
         return;
       }
       
-      // Create order on backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/create-order/`, {
+      // Create pre-booking first
+      const preBookingResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/pre-booking/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          amount: amount * 100, // Razorpay expects amount in paise
+          spot_ids: spotIds.join(","),
+          name,
+          email,
+          phone,
+          coupon_code: couponCode || "",
+          amount: amount,
+        }),
+      });
+
+      if (!preBookingResponse.ok) {
+        const errorData = await preBookingResponse.json();
+        setCheckingAvailability(false);
+        onFailure(errorData.error || "Failed to create booking");
+        return;
+      }
+
+      const preBookingData = await preBookingResponse.json();
+      const bookingIds = preBookingData.bookings.map((booking: any) => booking.id);
+
+      // Create Razorpay order
+      const orderResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/create-order/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: preBookingData.total_amount * 100, // Razorpay expects amount in paise
           currency: "INR",
           receipt: `booking_${Date.now()}`,
           notes: {
@@ -122,15 +148,16 @@ export default function RazorpayPayment({
             phone,
             spot_ids: spotIds.join(","),
             coupon_code: couponCode || "",
+            booking_ids: bookingIds.join(","),
           },
         }),
       });
 
-      if (!response.ok) {
+      if (!orderResponse.ok) {
         throw new Error("Failed to create order");
       }
 
-      const order = await response.json();
+      const order = await orderResponse.json();
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_YourKeyIdHere", // You'll need to set this
@@ -140,8 +167,8 @@ export default function RazorpayPayment({
         description: `Booking for ${spotIds.length} spot(s)`,
         order_id: order.id,
         handler: function (response: any) {
-          // Verify payment on backend
-          verifyPayment(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature);
+          // Verify payment on backend with booking IDs
+          verifyPayment(response.razorpay_payment_id, response.razorpay_order_id, response.razorpay_signature, bookingIds);
         },
         prefill: {
           name: name,
@@ -153,6 +180,8 @@ export default function RazorpayPayment({
         },
         modal: {
           ondismiss: function () {
+            // Handle payment cancellation
+            handlePaymentCancellation(bookingIds);
             setCheckingAvailability(false);
             onFailure("Payment cancelled by user");
           },
@@ -167,7 +196,7 @@ export default function RazorpayPayment({
     }
   };
 
-  const verifyPayment = async (paymentId: string, orderId: string, signature: string) => {
+  const verifyPayment = async (paymentId: string, orderId: string, signature: string, bookingIds: string[]) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/verify-payment/`, {
         method: "POST",
@@ -178,11 +207,7 @@ export default function RazorpayPayment({
           razorpay_payment_id: paymentId,
           razorpay_order_id: orderId,
           razorpay_signature: signature,
-          name,
-          email,
-          phone,
-          spot_ids: spotIds,
-          coupon_code: couponCode,
+          booking_ids: bookingIds,
         }),
       });
 
@@ -194,10 +219,30 @@ export default function RazorpayPayment({
       if (result.success) {
         onSuccess(paymentId);
       } else {
-        onFailure(result.message || "Payment verification failed");
+        onFailure(result.error || "Payment verification failed");
       }
     } catch (error) {
       onFailure(error instanceof Error ? error.message : "Payment verification failed");
+    }
+  };
+
+  const handlePaymentCancellation = async (bookingIds: string[]) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/payment-cancelled/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          booking_ids: bookingIds,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Failed to cancel bookings");
+      }
+    } catch (error) {
+      console.error("Error cancelling bookings:", error);
     }
   };
 

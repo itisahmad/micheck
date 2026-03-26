@@ -196,34 +196,35 @@ def verify_payment(request):
         except Exception as e:
             return Response({'error': f'Payment verification failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create booking after successful payment
-        booking_data = {
-            'spot_ids': spot_ids,
-            'performer_name': name,
-            'email': email,
-            'phone': phone,
-            'coupon_code': coupon_code if coupon_code and coupon_code.strip() else None,
-            'payment_id': payment_id,
-            'payment_status': 'paid'
-        }
+        # Update existing bookings after successful payment
+        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
         
-        serializer = BookingCreateSerializer(data=booking_data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not booking_ids:
+            return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        result = serializer.save()
+        # Get existing bookings
+        bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
         
-        # Serialize the booking objects
+        if len(bookings) != len(booking_ids):
+            return Response({'error': 'Invalid booking IDs or bookings already processed'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update bookings with payment details
+        for booking in bookings:
+            booking.payment_id = payment_id
+            booking.payment_status = 'paid'
+            booking.booking_status = 'confirmed'
+            booking.save()
+        
+        # Serialize the updated booking objects
         from .serializers import BookingSerializer
-        booking_serializer = BookingSerializer(result['bookings'], many=True)
+        booking_serializer = BookingSerializer(bookings, many=True)
         
         return Response({
             'success': True,
-            'message': f'Payment successful! Booked {len(result["bookings"])} spot(s).',
-            'total': float(result['total']),
+            'message': f'Payment successful! Confirmed {len(bookings)} booking(s).',
             'payment_id': payment_id,
             'bookings': booking_serializer.data
-        }, status=status.HTTP_201_CREATED)
+        }, status=status.HTTP_200_OK)
         
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -250,6 +251,116 @@ def create_superuser(request):
             'message': f'Superuser {username} created successfully',
             'login_url': '/admin/'
         })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def create_pre_booking(request):
+    """Create booking with pending status before payment."""
+    try:
+        data = request.data
+        spot_ids = data.get('spot_ids', '').split(',') if data.get('spot_ids') else []
+        performer_name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        phone = data.get('phone', '').strip()
+        coupon_code = data.get('coupon_code', '').strip() or None
+        amount = data.get('amount', 0)
+        
+        # Validate required fields
+        if not spot_ids or not performer_name or not email or not phone:
+            return Response({
+                'error': 'Missing required fields: spot_ids, name, email, phone'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get spots
+        spots = Spot.objects.filter(id__in=spot_ids)
+        if len(spots) != len(spot_ids):
+            return Response({
+                'error': 'One or more spots not found'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check availability
+        unavailable_spots = []
+        for spot in spots:
+            if spot.is_full:
+                unavailable_spots.append(f"{spot.show_label or spot.show_date} - {spot.time}")
+        
+        if unavailable_spots:
+            return Response({
+                'error': 'Some spots are no longer available',
+                'unavailable_spots': unavailable_spots
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate coupon if provided
+        coupon = None
+        if coupon_code:
+            try:
+                coupon = Coupon.objects.get(code=coupon_code, is_active=True)
+            except Coupon.DoesNotExist:
+                return Response({
+                    'error': 'Invalid coupon code'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Create bookings with pending status
+        bookings = []
+        for spot in spots:
+            booking = Booking.objects.create(
+                spot=spot,
+                performer_name=performer_name,
+                email=email,
+                phone=phone,
+                coupon_used=coupon,
+                amount_paid=spot.price,
+                payment_status='pending',
+                booking_status='pending'
+            )
+            bookings.append(booking)
+        
+        # Serialize bookings
+        from .serializers import BookingSerializer
+        booking_serializer = BookingSerializer(bookings, many=True)
+        
+        return Response({
+            'success': True,
+            'message': f'Pre-booking created for {len(bookings)} spot(s)',
+            'bookings': booking_serializer.data,
+            'total_amount': sum(float(booking.amount_paid) for booking in bookings)
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"DEBUG: Error creating pre-booking: {str(e)}")
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+def handle_payment_cancellation(request):
+    """Handle payment cancellation - mark bookings as cancelled."""
+    try:
+        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
+        
+        if not booking_ids:
+            return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Get existing bookings
+        bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
+        
+        if not bookings.exists():
+            return Response({'error': 'No pending bookings found'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Update bookings as cancelled
+        for booking in bookings:
+            booking.payment_status = 'cancelled'
+            booking.booking_status = 'cancelled'
+            booking.save()
+        
+        return Response({
+            'success': True,
+            'message': f'Cancelled {len(bookings)} booking(s)'
+        }, status=status.HTTP_200_OK)
+        
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
