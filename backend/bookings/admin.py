@@ -31,8 +31,8 @@ class CouponAdmin(admin.ModelAdmin):
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ('performer_name', 'email', 'spot', 'amount_paid', 'created_at')
-    list_filter = ('created_at', 'spot__show__date')
+    list_display = ('performer_name', 'email', 'spot', 'amount_paid','payment_status','booking_status', 'created_at')
+    list_filter = ('created_at', 'spot__show__date', 'payment_status', 'booking_status')
     search_fields = ('performer_name', 'email')
 
 
