@@ -227,6 +227,9 @@ export default function RazorpayPayment({
   };
 
   const handlePaymentCancellation = async (bookingIds: string[]) => {
+    console.log("[FRONTEND] Payment cancelled by user, calling cancellation API...");
+    console.log("[FRONTEND] Booking IDs to cancel:", bookingIds);
+    
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/payment-cancelled/`, {
         method: "POST",
@@ -238,11 +241,17 @@ export default function RazorpayPayment({
         }),
       });
 
+      console.log("[FRONTEND] Cancellation API response status:", response.status);
+      
       if (!response.ok) {
-        console.error("Failed to cancel bookings");
+        const errorData = await response.json();
+        console.error("[FRONTEND] Failed to cancel bookings:", errorData);
+      } else {
+        const successData = await response.json();
+        console.log("[FRONTEND] Cancellation successful:", successData);
       }
     } catch (error) {
-      console.error("Error cancelling bookings:", error);
+      console.error("[FRONTEND] Error cancelling bookings:", error);
     }
   };
 
