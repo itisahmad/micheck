@@ -87,6 +87,31 @@ class Booking(models.Model):
         return f"{self.performer_name} - {self.spot}"
 
 
+class RazorpayLog(models.Model):
+    """Track all Razorpay API calls and responses for debugging."""
+    booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name='razorpay_logs', null=True, blank=True)
+    api_type = models.CharField(max_length=20, choices=[
+        ('pre_booking', 'Pre-Booking'),
+        ('create_order', 'Create Order'),
+        ('verify_payment', 'Verify Payment'),
+        ('payment_cancelled', 'Payment Cancelled'),
+    ])
+    request_data = models.JSONField(default=dict)
+    response_data = models.JSONField(default=dict)
+    status_code = models.IntegerField(null=True, blank=True)
+    success = models.BooleanField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Razorpay Log"
+        verbose_name_plural = "Razorpay Logs"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.api_type} - {self.booking.performer_name if self.booking else 'No Booking'} - {self.created_at}"
+
+
 class SiteSettings(models.Model):
     """Site-wide settings that can be managed from admin."""
     maintenance_mode = models.BooleanField(default=False, help_text="Enable maintenance mode to take the site down")

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Show, Spot, Coupon, Booking, SiteSettings
+from .models import Show, Spot, Coupon, Booking, SiteSettings, RazorpayLog
 
 
 @admin.register(Show)
@@ -39,10 +39,21 @@ class BookingAdmin(admin.ModelAdmin):
 @admin.register(SiteSettings)
 class SiteSettingsAdmin(admin.ModelAdmin):
     list_display = ('maintenance_mode', 'maintenance_message')
-    
+    list_filter = ('maintenance_mode',)
+
     def has_add_permission(self, request):
         # Only allow one settings object
         return not SiteSettings.objects.exists()
     
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(RazorpayLog)
+class RazorpayLogAdmin(admin.ModelAdmin):
+    list_display = ('api_type', 'booking', 'success', 'status_code', 'created_at')
+    list_filter = ('api_type', 'success', 'created_at')
+    search_fields = ('booking__performer_name', 'booking__email', 'error_message')
+    readonly_fields = ('api_type', 'booking', 'request_data', 'response_data', 'status_code', 'success', 'error_message', 'created_at')
+    ordering = ('-created_at',)
+    list_per_page = 50

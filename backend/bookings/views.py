@@ -7,8 +7,25 @@ import razorpay
 import hashlib
 import hmac
 import time
-from .models import Show, Spot, Coupon, SiteSettings, Booking
+from .models import Show, Spot, Coupon, SiteSettings, Booking, RazorpayLog
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
+
+
+def log_razorpay_api(api_type, request_data, response_data=None, status_code=None, success=None, error_message=None, booking=None):
+    """Helper function to log Razorpay API calls."""
+    try:
+        RazorpayLog.objects.create(
+            api_type=api_type,
+            booking=booking,
+            request_data=request_data,
+            response_data=response_data or {},
+            status_code=status_code,
+            success=success,
+            error_message=error_message or ""
+        )
+        print(f"[RAZORPAY-LOG] Created log entry for {api_type}")
+    except Exception as e:
+        print(f"[RAZORPAY-LOG] ERROR: Failed to create log entry: {str(e)}")
 
 
 @api_view(["GET"])
@@ -134,9 +151,15 @@ def create_order(request):
         
         print(f"[RAZORPAY] [CREATE-ORDER] Order created successfully: {order}")
         
+        # Log success
+        log_razorpay_api('create_order', data.copy(), order, 201, True, None)
+        
         return Response(order, status=status.HTTP_201_CREATED)
         
     except Exception as e:
+        # Log error
+        log_razorpay_api('create_order', data.copy(), None, None, False, str(e))
+        
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -265,9 +288,17 @@ def verify_payment(request):
         }
         
         print(f"[RAZORPAY] [VERIFY-PAYMENT] Success response: {response_data}")
+        
+        # Log success for each booking
+        for booking in bookings:
+            log_razorpay_api('verify_payment', data.copy(), response_data, 200, True, None, booking)
+        
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
+        # Log error
+        log_razorpay_api('verify_payment', data.copy(), None, None, False, str(e))
+        
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -301,7 +332,10 @@ def create_pre_booking(request):
     """Create booking with pending status before payment."""
     try:
         data = request.data
-        print(f"🔍 [PRE-BOOKING] Request received: {data}")
+        print(f"[RAZORPAY] [PRE-BOOKING] Request received: {data}")
+        
+        # Log the request
+        log_razorpay_api('pre_booking', data.copy())
         
         spot_ids = data.get('spot_ids', '').split(',') if data.get('spot_ids') else []
         performer_name = data.get('name', '').strip()
@@ -310,7 +344,7 @@ def create_pre_booking(request):
         coupon_code = data.get('coupon_code', '').strip() or None
         amount = data.get('amount', 0)
         
-        print(f"🔍 [PRE-BOOKING] Parsed data - Spots: {spot_ids}, Name: {performer_name}, Email: {email}, Phone: {phone}, Coupon: {coupon_code}, Amount: {amount}")
+        print(f"[RAZORPAY] [PRE-BOOKING] Parsed data - Spots: {spot_ids}, Name: {performer_name}, Email: {email}, Phone: {phone}, Coupon: {coupon_code}, Amount: {amount}")
         
         # Validate required fields
         if not spot_ids or not performer_name or not email or not phone:
@@ -383,10 +417,19 @@ def create_pre_booking(request):
         }
         
         print(f"🔍 [PRE-BOOKING] Success response: {response_data}")
+        
+        # Log success response
+        for booking in bookings:
+            log_razorpay_api('pre_booking', data.copy(), response_data, 201, True, None, booking)
+        
         return Response(response_data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         print(f"DEBUG: Error creating pre-booking: {str(e)}")
+        
+        # Log error
+        log_razorpay_api('pre_booking', data.copy(), None, None, False, str(e))
+        
         return Response({
             'error': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -434,9 +477,17 @@ def handle_payment_cancellation(request):
         }
         
         print(f"[RAZORPAY] [PAYMENT-CANCELLED] Success: {response_data}")
+        
+        # Log success for each booking
+        for booking in bookings:
+            log_razorpay_api('payment_cancelled', data.copy(), response_data, 200, True, None, booking)
+        
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
+        # Log error
+        log_razorpay_api('payment_cancelled', data.copy(), None, None, False, str(e))
+        
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
