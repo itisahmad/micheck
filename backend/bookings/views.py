@@ -7,7 +7,7 @@ import razorpay
 import hashlib
 import hmac
 import time
-from .models import Show, Spot, Coupon, SiteSettings
+from .models import Show, Spot, Coupon, SiteSettings, Booking
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
 
