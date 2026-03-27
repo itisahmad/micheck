@@ -150,7 +150,14 @@ def verify_payment(request):
         payment_id = request.data.get('razorpay_payment_id')
         order_id = request.data.get('razorpay_order_id')
         signature = request.data.get('razorpay_signature')
-        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
+        booking_ids_raw = request.data.get('booking_ids', [])
+        # Handle both string and list inputs
+        if isinstance(booking_ids_raw, str):
+            booking_ids = booking_ids_raw.split(',') if booking_ids_raw else []
+        elif isinstance(booking_ids_raw, list):
+            booking_ids = booking_ids_raw
+        else:
+            booking_ids = []
         
         print(f"[RAZORPAY] [VERIFY-PAYMENT] Parsed data:")
         print(f"  payment_id: {payment_id}")
@@ -392,7 +399,14 @@ def handle_payment_cancellation(request):
         data = request.data
         print(f"[RAZORPAY] [PAYMENT-CANCELLED] Request received: {data}")
         
-        booking_ids = request.data.get('booking_ids', '').split(',') if request.data.get('booking_ids') else []
+        booking_ids_raw = request.data.get('booking_ids', [])
+        # Handle both string and list inputs
+        if isinstance(booking_ids_raw, str):
+            booking_ids = booking_ids_raw.split(',') if booking_ids_raw else []
+        elif isinstance(booking_ids_raw, list):
+            booking_ids = booking_ids_raw
+        else:
+            booking_ids = []
         print(f"[RAZORPAY] [PAYMENT-CANCELLED] Booking IDs to cancel: {booking_ids}")
         
         if not booking_ids:
