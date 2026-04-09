@@ -3,10 +3,12 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
 from django.conf import settings
+from django.http import HttpResponse
 import razorpay
 import hashlib
 import hmac
 import time
+import os
 from .models import Show, Spot, Coupon, SiteSettings, Booking, RazorpayLog
 from .serializers import ShowSerializer, SpotSerializer, CouponSerializer, BookingCreateSerializer
 
@@ -276,6 +278,21 @@ def verify_payment(request):
         
         print(f"[RAZORPAY] [VERIFY-PAYMENT] Successfully updated {len(bookings)} bookings")
         
+        # Generate PDF receipt
+        try:
+            from .pdf_utils import save_receipt_pdf
+            receipt_path = save_receipt_pdf(bookings, payment_id)
+            
+            # Update all bookings with receipt path
+            for booking in bookings:
+                booking.receipt_pdf = receipt_path
+                booking.save()
+            
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] PDF receipt generated: {receipt_path}")
+        except Exception as e:
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Failed to generate PDF receipt: {str(e)}")
+            receipt_path = None
+        
         # Serialize the updated booking objects
         from .serializers import BookingSerializer
         booking_serializer = BookingSerializer(bookings, many=True)
@@ -284,7 +301,8 @@ def verify_payment(request):
             'success': True,
             'message': f'Payment successful! Confirmed {len(bookings)} booking(s).',
             'payment_id': payment_id,
-            'bookings': booking_serializer.data
+            'bookings': booking_serializer.data,
+            'receipt_url': f"{settings.MEDIA_URL}{receipt_path}" if receipt_path else None
         }
         
         print(f"[RAZORPAY] [VERIFY-PAYMENT] Success response: {response_data}")
@@ -509,3 +527,36 @@ def maintenance_status(request):
             'maintenance_message': 'Service temporarily unavailable',
             'error': str(e)
         }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def download_receipt(request, booking_id):
+    """Download PDF receipt for a booking."""
+    try:
+        booking = Booking.objects.get(id=booking_id, payment_status='paid')
+        
+        if not booking.receipt_pdf:
+            return Response({'error': 'Receipt not available'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Construct full file path
+        file_path = os.path.join(settings.MEDIA_ROOT, booking.receipt_pdf)
+        
+        if not os.path.exists(file_path):
+            return Response({'error': 'Receipt file not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Read PDF file
+        with open(file_path, 'rb') as f:
+            pdf_content = f.read()
+        
+        # Create response
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="miccheck_receipt_{booking.payment_id}.pdf"'
+        response['Content-Length'] = len(pdf_content)
+        
+        return response
+        
+    except Booking.DoesNotExist:
+        return Response({'error': 'Booking not found or payment not completed'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"[RECEIPT] ERROR: Failed to download receipt: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

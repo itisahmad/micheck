@@ -8,3 +8,4 @@ Pillow>=10.0
 gunicorn>=21.0
 whitenoise>=6.0
 razorpay>=2.0
+reportlab>=4.0

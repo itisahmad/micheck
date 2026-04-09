@@ -217,6 +217,11 @@ export default function RazorpayPayment({
 
       const result = await response.json();
       if (result.success) {
+        // Download receipt if available
+        if (result.receipt_url) {
+          console.log("[FRONTEND] Downloading receipt...");
+          window.open(`${process.env.NEXT_PUBLIC_API_URL}/receipt/${result.bookings[0].id}/`, '_blank');
+        }
         onSuccess(paymentId);
       } else {
         onFailure(result.error || "Payment verification failed");

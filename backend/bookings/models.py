@@ -78,6 +78,7 @@ class Booking(models.Model):
         ('confirmed', 'Confirmed'),
         ('cancelled', 'Cancelled'),
     ], default='pending')
+    receipt_pdf = models.CharField(max_length=500, blank=True, null=True)  # Path to receipt PDF
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
