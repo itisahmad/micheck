@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.conf import settings
 from django.http import HttpResponse
+from django.db import transaction
 import razorpay
 import hashlib
 import hmac
@@ -201,6 +202,14 @@ def verify_payment(request):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Check if payment ID already processed (prevent replay attacks)
+        if Booking.objects.filter(payment_id=payment_id).exists():
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Payment ID already processed - {payment_id}")
+            return Response({
+                'error': 'Payment already processed',
+                'payment_id': payment_id
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if Razorpay keys are configured
         if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
             print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Razorpay keys not configured")
@@ -260,38 +269,44 @@ def verify_payment(request):
             print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: No booking IDs provided")
             return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get existing bookings
-        bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
-        print(f"[RAZORPAY] [VERIFY-PAYMENT] Found {len(bookings)} bookings to update out of {len(booking_ids)} requested")
-        
-        if len(bookings) != len(booking_ids):
-            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Invalid booking IDs or bookings already processed")
-            return Response({'error': 'Invalid booking IDs or bookings already processed'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Update bookings with payment details
-        for booking in bookings:
-            print(f"[RAZORPAY] [VERIFY-PAYMENT] Updating booking {booking.id}: {booking.performer_name} - {booking.spot}")
-            booking.payment_id = payment_id
-            booking.payment_status = 'paid'
-            booking.booking_status = 'confirmed'
-            booking.save()
-        
-        print(f"[RAZORPAY] [VERIFY-PAYMENT] Successfully updated {len(bookings)} bookings")
-        
-        # Generate PDF receipt
-        try:
-            from .pdf_utils import save_receipt_pdf
-            receipt_path = save_receipt_pdf(bookings, payment_id)
+        # Use atomic transaction to prevent race conditions
+        with transaction.atomic():
+            # Lock and get existing bookings
+            bookings = Booking.objects.select_for_update().filter(
+                id__in=booking_ids, 
+                payment_status='pending', 
+                booking_status='pending'
+            )
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] Found {len(bookings)} bookings to update out of {len(booking_ids)} requested")
             
-            # Update all bookings with receipt path
+            if len(bookings) != len(booking_ids):
+                print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Invalid booking IDs or bookings already processed")
+                return Response({'error': 'Invalid booking IDs or bookings already processed'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update bookings with payment details atomically
             for booking in bookings:
-                booking.receipt_pdf = receipt_path
+                print(f"[RAZORPAY] [VERIFY-PAYMENT] Updating booking {booking.id}: {booking.performer_name} - {booking.spot}")
+                booking.payment_id = payment_id
+                booking.payment_status = 'paid'
+                booking.booking_status = 'confirmed'
                 booking.save()
             
-            print(f"[RAZORPAY] [VERIFY-PAYMENT] PDF receipt generated: {receipt_path}")
-        except Exception as e:
-            print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Failed to generate PDF receipt: {str(e)}")
-            receipt_path = None
+            print(f"[RAZORPAY] [VERIFY-PAYMENT] Successfully updated {len(bookings)} bookings")
+            
+            # Generate PDF receipt
+            try:
+                from .pdf_utils import save_receipt_pdf
+                receipt_path = save_receipt_pdf(bookings, payment_id)
+                
+                # Update all bookings with receipt path
+                for booking in bookings:
+                    booking.receipt_pdf = receipt_path
+                    booking.save()
+                
+                print(f"[RAZORPAY] [VERIFY-PAYMENT] PDF receipt generated: {receipt_path}")
+            except Exception as e:
+                print(f"[RAZORPAY] [VERIFY-PAYMENT] ERROR: Failed to generate PDF receipt: {str(e)}")
+                receipt_path = None
         
         # Serialize the updated booking objects
         from .serializers import BookingSerializer
@@ -406,41 +421,58 @@ def create_pre_booking(request):
                     'error': 'Invalid coupon code'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Create bookings with pending status
-        bookings = []
-        for spot in spots:
-            booking = Booking.objects.create(
-                spot=spot,
-                performer_name=performer_name,
-                email=email,
-                phone=phone,
-                coupon_used=coupon,
-                amount_paid=spot.price,
-                payment_status='pending',
-                booking_status='pending'
-            )
-            bookings.append(booking)
-        
-        print(f"🔍 [PRE-BOOKING] Created {len(bookings)} bookings with IDs: {[b.id for b in bookings]}")
-        
-        # Serialize bookings
-        from .serializers import BookingSerializer
-        booking_serializer = BookingSerializer(bookings, many=True)
-        
-        response_data = {
-            'success': True,
-            'message': f'Pre-booking created for {len(bookings)} spot(s)',
-            'bookings': booking_serializer.data,
-            'total_amount': sum(float(booking.amount_paid) for booking in bookings)
-        }
-        
-        print(f"🔍 [PRE-BOOKING] Success response: {response_data}")
-        
-        # Log success response
-        for booking in bookings:
-            log_razorpay_api('pre_booking', data.copy(), response_data, 201, True, None, booking)
-        
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        # Use atomic transaction to prevent race conditions
+        with transaction.atomic():
+            # Lock spots to prevent double booking
+            locked_spots = Spot.objects.select_for_update().filter(id__in=spot_ids)
+            
+            # Check availability again with locks
+            unavailable_spots = []
+            for spot in locked_spots:
+                if spot.is_full:
+                    unavailable_spots.append(f"{spot.show_label or spot.show_date} - {spot.time}")
+            
+            if unavailable_spots:
+                return Response({
+                    'error': 'Some spots are no longer available',
+                    'unavailable_spots': unavailable_spots
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create bookings with pending status
+            bookings = []
+            for spot in locked_spots:
+                booking = Booking.objects.create(
+                    spot=spot,
+                    performer_name=performer_name,
+                    email=email,
+                    phone=phone,
+                    coupon_used=coupon,
+                    amount_paid=spot.price,
+                    payment_status='pending',
+                    booking_status='pending'
+                )
+                bookings.append(booking)
+            
+            print(f"🔍 [PRE-BOOKING] Created {len(bookings)} bookings with IDs: {[b.id for b in bookings]}")
+            
+            # Serialize bookings
+            from .serializers import BookingSerializer
+            booking_serializer = BookingSerializer(bookings, many=True)
+            
+            response_data = {
+                'success': True,
+                'message': f'Pre-booking created for {len(bookings)} spot(s)',
+                'bookings': booking_serializer.data,
+                'total_amount': sum(float(booking.amount_paid) for booking in bookings)
+            }
+            
+            print(f"🔍 [PRE-BOOKING] Success response: {response_data}")
+            
+            # Log success response
+            for booking in bookings:
+                log_razorpay_api('pre_booking', data.copy(), response_data, 201, True, None, booking)
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         print(f"DEBUG: Error creating pre-booking: {str(e)}")
@@ -474,33 +506,39 @@ def handle_payment_cancellation(request):
             print(f"[RAZORPAY] [PAYMENT-CANCELLED] ERROR: No booking IDs provided")
             return Response({'error': 'No booking IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get existing bookings
-        bookings = Booking.objects.filter(id__in=booking_ids, payment_status='pending', booking_status='pending')
-        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Found {len(bookings)} pending bookings to cancel")
-        
-        if not bookings.exists():
-            print(f"[RAZORPAY] [PAYMENT-CANCELLED] ERROR: No pending bookings found")
-            return Response({'error': 'No pending bookings found'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Update bookings as cancelled
-        for booking in bookings:
-            print(f"[RAZORPAY] [PAYMENT-CANCELLED] Cancelling booking {booking.id}: {booking.performer_name} - {booking.spot}")
-            booking.payment_status = 'cancelled'
-            booking.booking_status = 'cancelled'
-            booking.save()
-        
-        response_data = {
-            'success': True,
-            'message': f'Cancelled {len(bookings)} booking(s)'
-        }
-        
-        print(f"[RAZORPAY] [PAYMENT-CANCELLED] Success: {response_data}")
-        
-        # Log success for each booking
-        for booking in bookings:
-            log_razorpay_api('payment_cancelled', data.copy(), response_data, 200, True, None, booking)
-        
-        return Response(response_data, status=status.HTTP_200_OK)
+        # Use atomic transaction to prevent race conditions
+        with transaction.atomic():
+            # Lock and get existing bookings
+            bookings = Booking.objects.select_for_update().filter(
+                id__in=booking_ids, 
+                payment_status='pending', 
+                booking_status='pending'
+            )
+            print(f"[RAZORPAY] [PAYMENT-CANCELLED] Found {len(bookings)} pending bookings to cancel")
+            
+            if not bookings.exists():
+                print(f"[RAZORPAY] [PAYMENT-CANCELLED] ERROR: No pending bookings found")
+                return Response({'error': 'No pending bookings found'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update bookings as cancelled atomically
+            for booking in bookings:
+                print(f"[RAZORPAY] [PAYMENT-CANCELLED] Cancelling booking {booking.id}: {booking.performer_name} - {booking.spot}")
+                booking.payment_status = 'cancelled'
+                booking.booking_status = 'cancelled'
+                booking.save()
+            
+            response_data = {
+                'success': True,
+                'message': f'Cancelled {len(bookings)} booking(s)'
+            }
+            
+            print(f"[RAZORPAY] [PAYMENT-CANCELLED] Success: {response_data}")
+            
+            # Log success for each booking
+            for booking in bookings:
+                log_razorpay_api('payment_cancelled', data.copy(), response_data, 200, True, None, booking)
+            
+            return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
         # Log error
