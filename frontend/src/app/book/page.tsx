@@ -49,6 +49,7 @@ export default function BookPage() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [paymentStep, setPaymentStep] = useState(false);
+  const [lastPaymentId, setLastPaymentId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkMaintenanceAndFetchSpots = async () => {
@@ -139,6 +140,7 @@ export default function BookPage() {
 
   const handlePaymentSuccess = (paymentId: string) => {
     setSubmitSuccess(`Payment successful! Your booking is confirmed. Payment ID: ${paymentId}`);
+    setLastPaymentId(paymentId);
     setName("");
     setEmail("");
     setPhone("");
@@ -151,6 +153,24 @@ export default function BookPage() {
   const handlePaymentFailure = (error: string) => {
     setSubmitError(error);
     setPaymentStep(false);
+  };
+
+  const handleDownloadReceipt = async () => {
+    if (!lastPaymentId) return;
+    
+    try {
+      // Get bookings for this payment ID
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/bookings/by-payment/?payment_id=${lastPaymentId}`);
+      if (response.ok) {
+        const bookings = await response.json();
+        if (bookings.length > 0) {
+          const bookingId = bookings[0].id;
+          window.open(`${process.env.NEXT_PUBLIC_API_URL}/receipt/${bookingId}/`, '_blank');
+        }
+      }
+    } catch (error) {
+      console.error("Failed to download receipt:", error);
+    }
   };
 
   const byDate = spots.reduce<Record<string, SpotWithSelected[]>>((acc, s) => {
@@ -371,7 +391,18 @@ export default function BookPage() {
               </div> */}
 
               {submitSuccess && (
-                <p className="rounded-lg bg-[#22c55e]/20 p-4 text-[#22c55e]">{submitSuccess}</p>
+                <div className="rounded-lg bg-[#22c55e]/20 p-4 text-[#22c55e]">
+                  <p className="mb-3">{submitSuccess}</p>
+                  <button
+                    onClick={handleDownloadReceipt}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#f59e0b] px-4 py-2 text-[#0c0f14] font-semibold hover:bg-[#fbbf24] transition-colors"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Download Receipt
+                  </button>
+                </div>
               )}
               {submitError && (
                 <p className="rounded-lg bg-red-500/20 p-4 text-red-400">{submitError}</p>

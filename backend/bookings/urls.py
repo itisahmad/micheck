@@ -7,6 +7,7 @@ urlpatterns = [
     path('spots/', views.spot_list),
     path('coupon/validate/', views.validate_coupon),
     path('bookings/', views.create_booking),
+    path('bookings/by-payment/', views.get_bookings_by_payment_id),
     path('pre-booking/', views.create_pre_booking),
     path('create-order/', views.create_order),
     path('verify-payment/', views.verify_payment),

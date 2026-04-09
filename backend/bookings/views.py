@@ -530,6 +530,25 @@ def maintenance_status(request):
 
 
 @api_view(['GET'])
+def get_bookings_by_payment_id(request):
+    """Get bookings by payment ID."""
+    try:
+        payment_id = request.GET.get('payment_id')
+        if not payment_id:
+            return Response({'error': 'payment_id parameter required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        bookings = Booking.objects.filter(payment_id=payment_id)
+        from .serializers import BookingSerializer
+        serializer = BookingSerializer(bookings, many=True)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        print(f"[BOOKINGS] ERROR: Failed to get bookings by payment ID: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
 def download_receipt(request, booking_id):
     """Download PDF receipt for a booking."""
     try:
