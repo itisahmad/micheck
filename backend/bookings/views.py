@@ -548,14 +548,59 @@ def get_bookings_by_payment_id(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+def generate_receipt_for_booking(request, booking_id):
+    """Generate receipt for an existing paid booking."""
+    try:
+        booking = Booking.objects.get(id=booking_id, payment_status='paid')
+        
+        # Get all bookings for the same payment ID
+        bookings = Booking.objects.filter(payment_id=booking.payment_id)
+        
+        # Generate PDF receipt
+        from .pdf_utils import save_receipt_pdf
+        receipt_path = save_receipt_pdf(bookings, booking.payment_id)
+        
+        # Update all bookings with receipt path
+        for b in bookings:
+            b.receipt_pdf = receipt_path
+            b.save()
+        
+        print(f"[RECEIPT] Generated receipt for booking {booking_id}: {receipt_path}")
+        
+        return Response({
+            'success': True,
+            'message': 'Receipt generated successfully',
+            'receipt_path': receipt_path
+        }, status=status.HTTP_200_OK)
+        
+    except Booking.DoesNotExist:
+        return Response({'error': 'Booking not found or payment not completed'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        print(f"[RECEIPT] ERROR: Failed to generate receipt: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 def download_receipt(request, booking_id):
     """Download PDF receipt for a booking."""
     try:
         booking = Booking.objects.get(id=booking_id, payment_status='paid')
         
+        # Try to generate receipt if not available
         if not booking.receipt_pdf:
-            return Response({'error': 'Receipt not available'}, status=status.HTTP_404_NOT_FOUND)
+            # Generate receipt on-demand
+            bookings = Booking.objects.filter(payment_id=booking.payment_id)
+            from .pdf_utils import save_receipt_pdf
+            receipt_path = save_receipt_pdf(bookings, booking.payment_id)
+            
+            # Update all bookings with receipt path
+            for b in bookings:
+                b.receipt_pdf = receipt_path
+                b.save()
+            
+            booking.receipt_pdf = receipt_path
+            print(f"[RECEIPT] Generated receipt on-demand for booking {booking_id}: {receipt_path}")
         
         # Construct full file path
         file_path = os.path.join(settings.MEDIA_ROOT, booking.receipt_pdf)

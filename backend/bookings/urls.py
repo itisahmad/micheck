@@ -13,6 +13,7 @@ urlpatterns = [
     path('verify-payment/', views.verify_payment),
     path('payment-cancelled/', views.handle_payment_cancellation),
     path('receipt/<int:booking_id>/', views.download_receipt),
+    path('receipt/<int:booking_id>/generate/', views.generate_receipt_for_booking),
     path('create-superuser/', views.create_superuser),
     path('maintenance-status/', views.maintenance_status),
 ]
