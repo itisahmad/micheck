@@ -421,6 +421,11 @@ def create_pre_booking(request):
                     'error': 'Invalid coupon code'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Calculate discounted amount per spot
+        total_amount = float(amount)
+        spot_count = len(spots)
+        amount_per_spot = total_amount / spot_count if spot_count > 0 else total_amount
+        
         # Use atomic transaction to prevent race conditions
         with transaction.atomic():
             # Lock spots to prevent double booking
@@ -447,7 +452,7 @@ def create_pre_booking(request):
                     email=email,
                     phone=phone,
                     coupon_used=coupon,
-                    amount_paid=spot.price,
+                    amount_paid=str(amount_per_spot),
                     payment_status='pending',
                     booking_status='pending'
                 )
@@ -463,7 +468,7 @@ def create_pre_booking(request):
                 'success': True,
                 'message': f'Pre-booking created for {len(bookings)} spot(s)',
                 'bookings': booking_serializer.data,
-                'total_amount': sum(float(booking.amount_paid) for booking in bookings)
+                'total_amount': total_amount
             }
             
             print(f"🔍 [PRE-BOOKING] Success response: {response_data}")
