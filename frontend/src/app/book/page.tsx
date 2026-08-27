@@ -193,43 +193,6 @@ export default function BookPage() {
           </p>
 
 
-
-
-          {/* Static Maintenance Message */}
-          <div className="mt-8 bg-[#1a1f2e] rounded-xl p-8 border-2 border-[#f59e0b]">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-[#f59e0b] rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-[#0c0f14]"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c-.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                </svg>
-              </div>
-            </div>
-            <h2 className="font-display text-2xl font-bold text-white text-center mb-6">
-              🔧 Under Maintenance
-            </h2>
-            <div className="bg-[#0c0f14] rounded-lg p-6 mb-6">
-              <p className="text-[#e8e6e3] text-lg leading-relaxed text-center">
-                Site is currently under maintenance. We are working hard to bring it back online. Please check back soon.
-              </p>
-            </div>
-            <div className="text-center space-y-4">
-              <p className="text-[#6b7280] text-sm">
-                We're working to improve your experience. Please check back shortly.
-              </p>
-            </div>
-          </div>
-
-
           {maintenanceLoading && (
             <div className="mt-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f59e0b] mx-auto mb-4"></div>
